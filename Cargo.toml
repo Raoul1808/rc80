@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = [
+    "rc80-core",
+    "rc80-desktop",
+]
