@@ -2,6 +2,7 @@ use eframe::{
     egui::{self, mutex::Mutex},
     egui_glow, glow,
 };
+use std::mem::size_of;
 use std::sync::Arc;
 
 use rc80_core::System;
@@ -86,6 +87,7 @@ impl EmuRender {
                 })
                 .collect();
             gl.link_program(program);
+            gl.use_program(Some(program));
             assert!(
                 gl.get_program_link_status(program),
                 "{}",
@@ -102,7 +104,7 @@ impl EmuRender {
 
             gl.bind_vertex_array(Some(vertex_array));
 
-            let triangle_vertices = [0.5f32, 1.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32];
+            let triangle_vertices = [5.0f32, 10.0f32, 0.0f32, 0.0f32, 10.0f32, 0.0f32];
             let triangle_vertices_u8: &[u8] = core::slice::from_raw_parts(
                 triangle_vertices.as_ptr() as *const u8,
                 triangle_vertices.len() * core::mem::size_of::<f32>(),
@@ -112,7 +114,27 @@ impl EmuRender {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
             gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, triangle_vertices_u8, glow::STATIC_DRAW);
             gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+            gl.vertex_attrib_pointer_f32(
+                0,
+                2,
+                glow::FLOAT,
+                false,
+                (2 * size_of::<f32>()) as i32,
+                0,
+            );
+
+            use rc80_core::{SCREEN_HEIGHT, SCREEN_WIDTH};
+            #[rustfmt::skip]
+            let proj = [
+                2. / SCREEN_WIDTH as f32, 0., 0., -1.,
+                0., -2. / SCREEN_HEIGHT as f32, 0., 1.,
+                0., 0., -1., 0.,
+                0., 0., 0., 1.,
+            ];
+            let proj_uniform = gl
+                .get_uniform_location(program, "u_projection")
+                .expect("cannot find projection uniform location");
+            gl.uniform_matrix_4_f32_slice(Some(&proj_uniform), true, &proj);
 
             Self {
                 program,
