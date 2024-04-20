@@ -4,3 +4,6 @@ members = [
     "rc80-core",
     "rc80-desktop",
 ]
+
+[workspace.dependencies]
+rc80-core = { path = "rc80-core" }

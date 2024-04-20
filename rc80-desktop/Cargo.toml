@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 eframe = "0.27.2"
-rc80-core = { path = "../rc80-core" }
+rc80-core = { workspace = true }
