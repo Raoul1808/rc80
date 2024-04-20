@@ -69,6 +69,13 @@ impl System {
                 println!("Set register V{:x} to {}", register_index, register_value);
                 self.v_registers[register_index] = register_value;
             }
+            0x7 => {
+                let register_index = (opcode >> 8 & 0x7) as usize;
+                let value = (opcode & 0xFF) as u8;
+                println!("Increment register V{:x} by {}", register_index, value);
+                let reg = &mut self.v_registers[register_index];
+                *reg = reg.overflowing_add(value).0;
+            }
             0xa => {
                 let register_value = opcode & 0x0FFF;
                 println!("Set register I to {:#x}", register_value);

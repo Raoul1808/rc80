@@ -15,7 +15,7 @@ struct EmuApp {
 impl EmuApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let mut sys = System::default();
-        let bytes = include_bytes!("/home/mew/Downloads/1-chip8-logo.ch8");
+        let bytes = include_bytes!("/home/mew/Downloads/2-ibm-logo.ch8");
         sys.load(bytes);
         let gl = cc.gl.as_ref().expect("glow backend is not enabled");
         sys.pixels[0] = 1;
