@@ -4,6 +4,8 @@ pub const STACK_SIZE: usize = 16;
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
 
+pub type ScreenPixels = [u64; SCREEN_HEIGHT];
+
 pub struct System {
     pub program_counter: u16,
     pub stack_pointer: u8,
@@ -13,6 +15,7 @@ pub struct System {
     pub i_register: u16,
     pub time_register: u8,
     pub sound_register: u8,
+    pub pixels: ScreenPixels,
 }
 
 impl Default for System {
@@ -26,6 +29,7 @@ impl Default for System {
             i_register: 0,
             time_register: 0,
             sound_register: 0,
+            pixels: [0; SCREEN_HEIGHT],
         }
     }
 }

@@ -18,6 +18,9 @@ impl EmuApp {
         let bytes = include_bytes!("/home/mew/Downloads/1-chip8-logo.ch8");
         sys.load(bytes);
         let gl = cc.gl.as_ref().expect("glow backend is not enabled");
+        sys.pixels[0] = 727;
+        sys.pixels[1] = 1116;
+        println!("{:b}", sys.pixels[0]);
         Self {
             render: Arc::new(Mutex::new(EmuRender::new(gl))),
             sys,
@@ -31,10 +34,12 @@ impl EmuApp {
         );
 
         let render = self.render.clone();
+        let pixels = self.sys.pixels;
 
         let callback = egui::PaintCallback {
             rect,
             callback: Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
+                render.lock().update_buffers(pixels, painter.gl());
                 render.lock().paint(painter.gl());
             })),
         };
@@ -59,6 +64,9 @@ impl eframe::App for EmuApp {
 struct EmuRender {
     program: glow::Program,
     vertex_array: glow::VertexArray,
+    vertex_buffer: glow::Buffer,
+    index_buffer: glow::Buffer,
+    index_count: usize,
 }
 
 impl EmuRender {
@@ -104,15 +112,9 @@ impl EmuRender {
 
             gl.bind_vertex_array(Some(vertex_array));
 
-            let triangle_vertices = [5.0f32, 10.0f32, 0.0f32, 0.0f32, 10.0f32, 0.0f32];
-            let triangle_vertices_u8: &[u8] = core::slice::from_raw_parts(
-                triangle_vertices.as_ptr() as *const u8,
-                triangle_vertices.len() * core::mem::size_of::<f32>(),
-            );
-
-            let buffer = gl.create_buffer().expect("cannot create buffer");
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
-            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, triangle_vertices_u8, glow::STATIC_DRAW);
+            let vertex_buffer = gl.create_buffer().expect("cannot create buffer");
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &[0], glow::DYNAMIC_DRAW);
             gl.enable_vertex_attrib_array(0);
             gl.vertex_attrib_pointer_f32(
                 0,
@@ -122,6 +124,10 @@ impl EmuRender {
                 (2 * size_of::<f32>()) as i32,
                 0,
             );
+
+            let index_buffer = gl.create_buffer().expect("cannot create buffer");
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
+            gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, &[0], glow::STREAM_DRAW);
 
             use rc80_core::{SCREEN_HEIGHT, SCREEN_WIDTH};
             #[rustfmt::skip]
@@ -139,7 +145,46 @@ impl EmuRender {
             Self {
                 program,
                 vertex_array,
+                vertex_buffer,
+                index_buffer,
+                index_count: 0,
             }
+        }
+    }
+
+    fn update_buffers(&mut self, pixels: rc80_core::ScreenPixels, gl: &glow::Context) {
+        use glow::HasContext as _;
+        unsafe {
+            let mut vertices = Vec::<f32>::new();
+            let mut indices = Vec::<u32>::new();
+            let mut next_index = 0;
+            for (y_index, row) in pixels.iter().enumerate() {
+                for x in 0..u64::BITS {
+                    let b = row.overflowing_shr(x).0 & 1;
+                    if b == 1 {
+                        let x = (u64::BITS - x - 1) as f32;
+                        let y = y_index as f32;
+                        vertices.extend_from_slice(&[x, y, x + 1., y, x + 1., y + 1., x, y + 1.]);
+                        let i = next_index;
+                        indices.extend_from_slice(&[i, i + 1, i + 2, i + 2, i + 3, i]);
+                        next_index += 4;
+                    }
+                }
+            }
+            let vertices_u8: &[u8] = core::slice::from_raw_parts(
+                vertices.as_ptr() as *const u8,
+                vertices.len() * core::mem::size_of::<f32>(),
+            );
+            let indices_u8: &[u8] = core::slice::from_raw_parts(
+                indices.as_ptr() as *const u8,
+                indices.len() * core::mem::size_of::<u32>(),
+            );
+            gl.bind_vertex_array(Some(self.vertex_array));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vertex_buffer));
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, vertices_u8, glow::STREAM_DRAW);
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.index_buffer));
+            gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, indices_u8, glow::STREAM_DRAW);
+            self.index_count = indices.len();
         }
     }
 
@@ -148,7 +193,12 @@ impl EmuRender {
         unsafe {
             gl.use_program(Some(self.program));
             gl.bind_vertex_array(Some(self.vertex_array));
-            gl.draw_arrays(glow::TRIANGLES, 0, 3);
+            gl.draw_elements(
+                glow::TRIANGLES,
+                self.index_count as i32,
+                glow::UNSIGNED_INT,
+                0,
+            );
             gl.bind_vertex_array(None);
             gl.use_program(None);
         }
