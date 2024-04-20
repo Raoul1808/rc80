@@ -3,8 +3,9 @@ pub const REGISTER_AMOUNT: usize = 16;
 pub const STACK_SIZE: usize = 16;
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
+pub const PIXEL_AMOUNT: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
-pub type ScreenPixels = [u64; SCREEN_HEIGHT];
+pub type ScreenPixels = [u8; PIXEL_AMOUNT];
 
 pub struct System {
     pub program_counter: u16,
@@ -29,7 +30,7 @@ impl Default for System {
             i_register: 0,
             time_register: 0,
             sound_register: 0,
-            pixels: [0; SCREEN_HEIGHT],
+            pixels: [0; PIXEL_AMOUNT],
         }
     }
 }

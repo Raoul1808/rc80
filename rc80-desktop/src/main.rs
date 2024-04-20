@@ -18,8 +18,10 @@ impl EmuApp {
         let bytes = include_bytes!("/home/mew/Downloads/1-chip8-logo.ch8");
         sys.load(bytes);
         let gl = cc.gl.as_ref().expect("glow backend is not enabled");
-        sys.pixels[0] = 727;
-        sys.pixels[1] = 1116;
+        sys.pixels[0] = 1;
+        sys.pixels[1] = 1;
+        sys.pixels[727] = 1;
+        sys.pixels[1116] = 1;
         println!("{:b}", sys.pixels[0]);
         Self {
             render: Arc::new(Mutex::new(EmuRender::new(gl))),
@@ -158,17 +160,15 @@ impl EmuRender {
             let mut vertices = Vec::<f32>::new();
             let mut indices = Vec::<u32>::new();
             let mut next_index = 0;
-            for (y_index, row) in pixels.iter().enumerate() {
-                for x in 0..u64::BITS {
-                    let b = row.overflowing_shr(x).0 & 1;
-                    if b == 1 {
-                        let x = (u64::BITS - x - 1) as f32;
-                        let y = y_index as f32;
-                        vertices.extend_from_slice(&[x, y, x + 1., y, x + 1., y + 1., x, y + 1.]);
-                        let i = next_index;
-                        indices.extend_from_slice(&[i, i + 1, i + 2, i + 2, i + 3, i]);
-                        next_index += 4;
-                    }
+            for (index, pixel) in pixels.into_iter().enumerate() {
+                use rc80_core::SCREEN_WIDTH;
+                if pixel == 1 {
+                    let x = (index % SCREEN_WIDTH) as f32;
+                    let y = (index / SCREEN_WIDTH) as f32;
+                    vertices.extend_from_slice(&[x, y, x + 1., y, x + 1., y + 1., x, y + 1.]);
+                    let i = next_index;
+                    indices.extend_from_slice(&[i, i + 1, i + 2, i + 2, i + 3, i]);
+                    next_index += 4;
                 }
             }
             let vertices_u8: &[u8] = core::slice::from_raw_parts(
