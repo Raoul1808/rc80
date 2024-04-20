@@ -10,12 +10,13 @@ use rc80_core::System;
 struct EmuApp {
     render: Arc<Mutex<EmuRender>>,
     sys: System,
+    play_sim: bool,
 }
 
 impl EmuApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let mut sys = System::default();
-        let bytes = include_bytes!("/home/mew/Downloads/2-ibm-logo.ch8");
+        let bytes = include_bytes!("/home/mew/Downloads/3-corax+.ch8");
         sys.load(bytes);
         let gl = cc.gl.as_ref().expect("glow backend is not enabled");
         sys.pixels[0] = 1;
@@ -26,6 +27,7 @@ impl EmuApp {
         Self {
             render: Arc::new(Mutex::new(EmuRender::new(gl))),
             sys,
+            play_sim: false,
         }
     }
 
@@ -53,13 +55,33 @@ impl eframe::App for EmuApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Hello eframe!");
-            if ui.button("Step emulation").clicked() {
-                self.sys.step();
-            }
+            ui.label(format!(
+                "Status: {}",
+                if self.play_sim { "Playing" } else { "Paused" }
+            ));
+            ui.horizontal(|ui| {
+                if ui
+                    .button(if self.play_sim { "Pause" } else { "Play" })
+                    .clicked()
+                {
+                    self.play_sim = !self.play_sim;
+                }
+                if ui
+                    .add_enabled(!self.play_sim, egui::Button::new("Step"))
+                    .clicked()
+                {
+                    self.sys.step();
+                }
+            });
             egui::Frame::canvas(ui.style()).show(ui, |ui| {
                 self.custom_painting(ui);
             });
         });
+
+        if self.play_sim {
+            self.sys.step();
+            ctx.request_repaint();
+        }
     }
 }
 

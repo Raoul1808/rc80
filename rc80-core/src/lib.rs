@@ -51,37 +51,151 @@ impl System {
         let code_type = opcode >> 12;
         let mut jumped = false;
         match code_type {
-            0x0 => {
-                if opcode == 0x00E0 {
+            0x0 => match opcode {
+                0x00E0 => {
                     println!("Clear screen!");
                     self.clear_screen();
                 }
-            }
+                0x00EE => {
+                    println!("Return from subroutine");
+                    self.stack_pointer -= 1;
+                    self.program_counter = self.stack[self.stack_pointer as usize];
+                    self.stack[self.stack_pointer as usize] = 0;
+                }
+                _ => {
+                    println!("not supported");
+                }
+            },
             0x1 => {
                 let target = opcode & 0x0FFF;
                 println!("Jump to {:#x}", target);
                 self.program_counter = target;
                 jumped = true;
             }
+            0x2 => {
+                let target = opcode & 0x0FFF;
+                println!("Call subroutine {:x}", target);
+                self.stack[self.stack_pointer as usize] = self.program_counter;
+                self.stack_pointer += 1;
+                self.program_counter = target;
+                jumped = true;
+            }
+            0x3 => {
+                let register = (opcode >> 8 & 0xF) as usize;
+                let value = (opcode & 0xFF) as u8;
+                println!("Register V{:x} == {}?", register, value);
+                if self.v_registers[register] == value {
+                    println!("Skipped line");
+                    self.program_counter += 2;
+                }
+            }
+            0x4 => {
+                let register = (opcode >> 8 & 0xF) as usize;
+                let value = (opcode & 0xFF) as u8;
+                println!("Register V{:x} != {}?", register, value);
+                if self.v_registers[register] != value {
+                    println!("Skipped line");
+                    self.program_counter += 2;
+                }
+            }
+            0x5 => {
+                let register1 = (opcode >> 8 & 0xF) as usize;
+                let register2 = (opcode >> 4 & 0xF) as usize;
+                println!("Register V{:x} == V{:x}?", register1, register2);
+                if self.v_registers[register1] == self.v_registers[register2] {
+                    println!("Skipped line");
+                    self.program_counter += 2;
+                }
+            }
             0x6 => {
-                let register_index = (opcode >> 8 & 0x7) as usize;
+                let register_index = (opcode >> 8 & 0xF) as usize;
                 let register_value = (opcode & 0xFF) as u8;
                 println!("Set register V{:x} to {}", register_index, register_value);
                 self.v_registers[register_index] = register_value;
             }
             0x7 => {
-                let register_index = (opcode >> 8 & 0x7) as usize;
+                let register_index = (opcode >> 8 & 0xF) as usize;
                 let value = (opcode & 0xFF) as u8;
                 println!("Increment register V{:x} by {}", register_index, value);
                 let reg = &mut self.v_registers[register_index];
                 *reg = reg.overflowing_add(value).0;
             }
-            0xa => {
+            0x8 => {
+                let register1 = (opcode >> 8 & 0xF) as usize;
+                let register2 = (opcode >> 4 & 0xF) as usize;
+                let op = opcode & 0xF;
+                let reg2 = self.v_registers[register2];
+                let reg1 = &mut self.v_registers[register1];
+                match op {
+                    0x0 => {
+                        println!("Operation V{:x} = V{:x}", register1, register2);
+                        *reg1 = reg2;
+                    }
+                    0x1 => {
+                        println!("Operation V{:x} |= V{:x}", register1, register2);
+                        *reg1 |= reg2;
+                    }
+                    0x2 => {
+                        println!("Operation V{:x} &= V{:x}", register1, register2);
+                        *reg1 &= reg2;
+                    }
+                    0x3 => {
+                        println!("Operation V{:x} ^= V{:x}", register1, register2);
+                        *reg1 ^= reg2;
+                    }
+                    0x4 => {
+                        println!("Operation V{:x} += V{:x}", register1, register2);
+                        let res = reg1.overflowing_add(reg2);
+                        *reg1 = res.0;
+                        self.v_registers[15] = res.1 as u8;
+                    }
+                    0x5 => {
+                        println!("Operation V{:x} -= V{:x}", register1, register2);
+                        let res = reg1.overflowing_sub(reg2);
+                        *reg1 = res.0;
+                        self.v_registers[15] = res.1 as u8;
+                    }
+                    0x6 => {
+                        println!("Operation V{:x} >> 1", register1);
+                        let res = reg1.overflowing_shr(1);
+                        *reg1 = res.0;
+                        self.v_registers[15] = res.1 as u8;
+                    }
+                    0x7 => {
+                        println!(
+                            "Operation V{:x} = V{:x} - V{:x}",
+                            register1, register2, register1
+                        );
+                        let res = reg2.overflowing_sub(*reg1);
+                        *reg1 = res.0;
+                        self.v_registers[15] = res.1 as u8;
+                    }
+                    0xE => {
+                        println!("Operation V{:x} << 1", register1);
+                        let res = reg1.overflowing_shl(1);
+                        *reg1 = res.0;
+                        self.v_registers[15] = res.1 as u8;
+                    }
+                    _ => {
+                        println!("what the hell??");
+                    }
+                }
+            }
+            0x9 => {
+                let register1 = (opcode >> 8 & 0xF) as usize;
+                let register2 = (opcode >> 4 & 0xF) as usize;
+                println!("Register V{:x} != V{:x}?", register1, register2);
+                if self.v_registers[register1] != self.v_registers[register2] {
+                    println!("Skipped line");
+                    self.program_counter += 2;
+                }
+            }
+            0xA => {
                 let register_value = opcode & 0x0FFF;
                 println!("Set register I to {:#x}", register_value);
                 self.i_register = register_value;
             }
-            0xd => {
+            0xD => {
                 let vx_reg = opcode >> 8 & 0xF;
                 let vy_reg = opcode >> 4 & 0xF;
                 let x = self.v_registers[vx_reg as usize];
@@ -100,6 +214,50 @@ impl System {
                     }
                 }
                 self.blit_sprite(x, y, &pixel_data);
+            }
+            0xF => {
+                let reg_val = opcode >> 8 & 0xF;
+                let code = opcode & 0xFF;
+                match code {
+                    0x1E => {
+                        let val = self.v_registers[reg_val as usize];
+                        println!("Incrementing I by V{:x} = {}", reg_val, val);
+                        self.i_register += val as u16;
+                    }
+                    0x33 => {
+                        println!("Saving BCD value of register V{:x}", reg_val);
+                        let val = format!("{:0>3}", self.v_registers[reg_val as usize]);
+                        println!("{:?}", val);
+                        val.as_bytes().iter().enumerate().for_each(|(i, v)| {
+                            println!("{} - {:b}", v, v);
+                            self.memory[self.i_register as usize + i] = v & 0xF;
+                        });
+                    }
+                    0x55 => {
+                        let reg_index = reg_val as usize;
+                        for i in 0..=reg_index {
+                            let val = self.v_registers[i];
+                            self.memory[self.i_register as usize] = val;
+                            println!(
+                                "Saving value of register V{:x} to address {:x}",
+                                i, self.i_register
+                            );
+                            self.i_register += 1;
+                        }
+                    }
+                    0x65 => {
+                        let reg_index = reg_val as usize;
+                        for i in 0..=reg_index {
+                            let val = self.memory[self.i_register as usize];
+                            self.v_registers[i] = val;
+                            self.i_register += 1;
+                            println!("Loading value for register V{:x} = {}", i, val);
+                        }
+                    }
+                    _ => {
+                        println!("unimplemented");
+                    }
+                }
             }
             _ => {
                 println!("unimplemented");
