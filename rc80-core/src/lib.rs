@@ -48,7 +48,84 @@ impl System {
         let opcode = (self.memory[self.program_counter as usize] as u16) << 8
             | self.memory[self.program_counter as usize + 1] as u16;
         println!("Found opcode: {:#06x}", opcode);
-        self.program_counter += 2;
+        let code_type = opcode >> 12;
+        let mut jumped = false;
+        match code_type {
+            0x0 => {
+                if opcode == 0x00E0 {
+                    println!("Clear screen!");
+                    self.clear_screen();
+                }
+            }
+            0x1 => {
+                let target = opcode & 0x0FFF;
+                println!("Jump to {:#x}", target);
+                self.program_counter = target;
+                jumped = true;
+            }
+            0x6 => {
+                let register_index = (opcode >> 8 & 0x7) as usize;
+                let register_value = (opcode & 0xFF) as u8;
+                println!("Set register V{:x} to {}", register_index, register_value);
+                self.v_registers[register_index] = register_value;
+            }
+            0xa => {
+                let register_value = opcode & 0x0FFF;
+                println!("Set register I to {:#x}", register_value);
+                self.i_register = register_value;
+            }
+            0xd => {
+                let vx_reg = opcode >> 8 & 0xF;
+                let vy_reg = opcode >> 4 & 0xF;
+                let x = self.v_registers[vx_reg as usize];
+                let y = self.v_registers[vy_reg as usize];
+                let data_size = (opcode & 0xF) as usize;
+                println!("Draw sprite at {:?} with size {}", (x, y), data_size);
+                let mut bytes = vec![];
+                for i in 0..data_size {
+                    bytes.push(self.memory[self.i_register as usize + i]);
+                }
+                let mut pixel_data = vec![];
+                for byte in bytes {
+                    for b in (0..u8::BITS).rev() {
+                        let b = byte >> b & 1;
+                        pixel_data.push(b);
+                    }
+                }
+                self.blit_sprite(x, y, &pixel_data);
+            }
+            _ => {
+                println!("unimplemented");
+            }
+        }
+        if !jumped {
+            self.program_counter += 2;
+        }
+    }
+
+    fn clear_screen(&mut self) {
+        self.pixels.iter_mut().for_each(|p| *p = 0);
+    }
+
+    fn blit_sprite(&mut self, x: u8, y: u8, sprite: &[u8]) {
+        self.v_registers[15] = 0;
+        for (index, pixel) in sprite.iter().enumerate() {
+            if *pixel == 1 {
+                let mut x = x as usize + index % 8;
+                let mut y = y as usize + index / 8;
+                if x >= SCREEN_WIDTH {
+                    x -= SCREEN_WIDTH;
+                }
+                if y >= SCREEN_HEIGHT {
+                    y -= SCREEN_HEIGHT;
+                }
+                let target = &mut self.pixels[y * SCREEN_WIDTH + x];
+                if *target == 1 {
+                    self.v_registers[15] = 1;
+                }
+                *target ^= *pixel;
+            }
+        }
     }
 }
 
